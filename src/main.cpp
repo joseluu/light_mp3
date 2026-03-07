@@ -432,7 +432,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         wc.lpszClassName = L"LightMP3";
         wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
         wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-        wc.hIcon         = LoadIconW(nullptr, IDI_APPLICATION);
+        wc.hIcon         = LoadIconW(hInst, MAKEINTRESOURCEW(100));
         RegisterClassExW(&wc);
     }
 
