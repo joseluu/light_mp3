@@ -24,11 +24,11 @@
 // Layout constants (client-area pixels)
 // ---------------------------------------------------------------------------
 static const int COVER_X  = 10,  COVER_Y  = 10,  COVER_W  = 200, COVER_H  = 200;
-static const int META_X   = 220, META_Y   = 10,  META_W   = 510, META_H   = 265;
-static const int FILE_X   = 10,  FILE_Y   = 218, FILE_W   = 200, FILE_H   = 18;
-static const int CTRL_Y   = 288;
-static const int SEEK_X   = 10,  SEEK_Y   = 330, SEEK_W   = 720, SEEK_H   = 26;
-static const int CLIENT_W = 740, CLIENT_H = 370;
+static const int META_X   = 220, META_Y   = 10,  META_W   = 510, META_H   = 200;
+static const int FILE_X   = 10,  FILE_Y   = 218, FILE_W   = 720, FILE_H   = 18;
+static const int CTRL_Y   = 244;
+static const int SEEK_X   = 10,  SEEK_Y   = 286, SEEK_W   = 720, SEEK_H   = 26;
+static const int CLIENT_W = 740, CLIENT_H = 326;
 
 // ---------------------------------------------------------------------------
 // Control IDs
@@ -443,7 +443,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     g_hwndMain = CreateWindowExW(
         WS_EX_ACCEPTFILES,
         L"LightMP3",
-        L"Light MP3 Player v1.0.2",
+        L"Light MP3 Player v1.0.3",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rc.right - rc.left, rc.bottom - rc.top,
