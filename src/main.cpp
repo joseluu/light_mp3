@@ -443,7 +443,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     g_hwndMain = CreateWindowExW(
         WS_EX_ACCEPTFILES,
         L"LightMP3",
-        L"Light MP3 Player",
+        L"Light MP3 Player v1.0.2",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rc.right - rc.left, rc.bottom - rc.top,

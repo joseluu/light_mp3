@@ -45,8 +45,18 @@ void Player::FillBuffer(int idx) {
         avail = totalPcm - srcOffset;
     size_t toCopy = (avail < frameSamples) ? avail : frameSamples;
 
-    if (toCopy > 0)
-        memcpy(buf.data(), m_pcm.data() + srcOffset, toCopy * sizeof(int16_t));
+    // Nothing left — signal end-of-track, do NOT submit another buffer.
+    if (toCopy == 0) {
+        wh = {};
+        if (m_playing) {
+            m_playing = false;
+            if (m_notify)
+                PostMessage(m_notify, WM_PLAYER_DONE, 0, 0);
+        }
+        return;
+    }
+
+    memcpy(buf.data(), m_pcm.data() + srcOffset, toCopy * sizeof(int16_t));
     if (toCopy < frameSamples)
         memset(buf.data() + toCopy, 0, (frameSamples - toCopy) * sizeof(int16_t));
 
@@ -57,13 +67,6 @@ void Player::FillBuffer(int idx) {
     wh.dwBufferLength = (DWORD)(frameSamples * sizeof(int16_t));
     waveOutPrepareHeader(m_hWaveOut, &wh, sizeof(wh));
     waveOutWrite(m_hWaveOut, &wh, sizeof(wh));
-
-    // If we've played past the end, notify the UI.
-    if (toCopy == 0 && m_playing) {
-        m_playing = false;
-        if (m_notify)
-            PostMessage(m_notify, WM_PLAYER_DONE, 0, 0);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,9 +166,16 @@ void Player::Pause() {
 // ---------------------------------------------------------------------------
 void Player::Stop() {
     if (!m_open) return;
-    m_playing = false;
+    m_playing = false;  // suppress callbacks before reset
     if (m_hWaveOut) {
         waveOutReset(m_hWaveOut);
+        for (int i = 0; i < NUM_BUFS; i++) {
+            if (m_headers[i].dwFlags & WHDR_PREPARED)
+                waveOutUnprepareHeader(m_hWaveOut, &m_headers[i], sizeof(WAVEHDR));
+            m_headers[i] = {};
+        }
+        waveOutClose(m_hWaveOut);
+        m_hWaveOut = nullptr;
     }
     m_playPos = 0;
 }
@@ -197,13 +207,19 @@ void Player::SeekTo(DWORD ms) {
     if (!m_open) return;
     size_t target = (size_t)((double)ms / 1000.0 * m_sampleRate);
     if (target > m_totalSamples) target = m_totalSamples;
+
+    bool wasPlaying = m_playing;
+    // Suppress callbacks before reset so they don't race with re-priming.
+    m_playing = false;
     m_playPos = target;
 
-    // If currently playing, reset waveOut and re-prime buffers.
-    if (m_playing && m_hWaveOut) {
+    if (m_hWaveOut) {
         waveOutReset(m_hWaveOut);
-        for (int i = 0; i < NUM_BUFS; i++)
-            FillBuffer(i);
+        if (wasPlaying) {
+            m_playing = true;
+            for (int i = 0; i < NUM_BUFS; i++)
+                FillBuffer(i);
+        }
     }
 }
 
