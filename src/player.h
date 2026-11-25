@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 // Posted to notify window when playback reaches the end.
 #define WM_PLAYER_DONE  (WM_APP + 1)
@@ -47,6 +49,17 @@ private:
     static const int BUF_SAMPLES = 4096; // samples per channel per buffer
     WAVEHDR  m_headers[NUM_BUFS] = {};
     std::vector<int16_t> m_bufData[NUM_BUFS];
+
+    // Feeder thread: the waveOut callback only signals m_event; all waveOut
+    // calls that refill buffers happen here (calling them from the callback
+    // can deadlock, notably when the default output device changes).
+    std::mutex   m_mtx;
+    std::thread  m_worker;
+    HANDLE       m_event = nullptr;
+    volatile bool m_quit = false;
+    void StartWorker();
+    void StopWorker();
+    void WorkerLoop();
 
     bool LoadWav(const std::vector<uint8_t>& data);
     void FillBuffer(int idx);

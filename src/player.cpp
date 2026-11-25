@@ -16,13 +16,35 @@ void CALLBACK Player::WaveOutProc(HWAVEOUT, UINT uMsg,
 {
     if (uMsg != WOM_DONE) return;
     Player* self = (Player*)dwInstance;
-    if (!self->m_playing) return;
+    if (self->m_event) SetEvent(self->m_event);   // only SetEvent is safe here
+}
 
-    // Find which buffer just finished and refill it.
-    for (int i = 0; i < NUM_BUFS; i++) {
-        if (self->m_headers[i].dwFlags & WHDR_DONE) {
-            self->FillBuffer(i);
-        }
+// ---------------------------------------------------------------------------
+void Player::StartWorker() {
+    if (m_worker.joinable()) return;
+    if (!m_event) m_event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    m_quit = false;
+    m_worker = std::thread([this] { WorkerLoop(); });
+}
+
+void Player::StopWorker() {
+    if (m_worker.joinable()) {
+        m_quit = true;
+        SetEvent(m_event);
+        m_worker.join();
+    }
+    if (m_event) { CloseHandle(m_event); m_event = nullptr; }
+}
+
+void Player::WorkerLoop() {
+    while (true) {
+        WaitForSingleObject(m_event, INFINITE);
+        if (m_quit) break;
+        std::lock_guard<std::mutex> lk(m_mtx);
+        if (!m_playing || !m_hWaveOut) continue;
+        for (int i = 0; i < NUM_BUFS; i++)
+            if (m_headers[i].dwFlags & WHDR_DONE)
+                FillBuffer(i);
     }
 }
 
@@ -218,6 +240,8 @@ void Player::Play() {
         }
     }
 
+    StartWorker();
+    std::lock_guard<std::mutex> lk(m_mtx);
     m_playing = true;
 
     // Prime all buffers.
@@ -244,7 +268,8 @@ void Player::Pause() {
 // ---------------------------------------------------------------------------
 void Player::Stop() {
     if (!m_open) return;
-    m_playing = false;  // suppress callbacks before reset
+    m_playing = false;
+    StopWorker();       // no more refills once the thread is gone
     if (m_hWaveOut) {
         waveOutReset(m_hWaveOut);
         for (int i = 0; i < NUM_BUFS; i++) {
@@ -261,6 +286,7 @@ void Player::Stop() {
 // ---------------------------------------------------------------------------
 void Player::Close() {
     m_playing = false;
+    StopWorker();
     if (m_hWaveOut) {
         waveOutReset(m_hWaveOut);
         for (int i = 0; i < NUM_BUFS; i++) {
@@ -286,8 +312,8 @@ void Player::SeekTo(DWORD ms) {
     size_t target = (size_t)((double)ms / 1000.0 * m_sampleRate);
     if (target > m_totalSamples) target = m_totalSamples;
 
+    std::lock_guard<std::mutex> lk(m_mtx);
     bool wasPlaying = m_playing;
-    // Suppress callbacks before reset so they don't race with re-priming.
     m_playing = false;
     m_playPos = target;
 
