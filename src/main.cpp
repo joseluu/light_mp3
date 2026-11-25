@@ -309,7 +309,7 @@ static LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             OPENFILENAMEW ofn = {};
             ofn.lStructSize  = sizeof(ofn);
             ofn.hwndOwner    = hwnd;
-            ofn.lpstrFilter  = L"MP3 files\0*.mp3\0All files\0*.*\0";
+            ofn.lpstrFilter  = L"Audio files\0*.mp3;*.wav\0All files\0*.*\0";
             ofn.lpstrFile    = buf;
             ofn.nMaxFile     = MAX_PATH;
             ofn.Flags        = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;

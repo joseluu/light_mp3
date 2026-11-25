@@ -70,6 +70,71 @@ void Player::FillBuffer(int idx) {
 }
 
 // ---------------------------------------------------------------------------
+// Parse a WAV file (PCM 8/16/24/32-bit or IEEE float 32/64-bit) into m_pcm.
+bool Player::LoadWav(const std::vector<uint8_t>& d) {
+    auto rd16 = [&](size_t o) { return (uint32_t)(d[o] | (d[o + 1] << 8)); };
+    auto rd32 = [&](size_t o) { return (uint32_t)(d[o] | (d[o + 1] << 8) | (d[o + 2] << 16) | ((uint32_t)d[o + 3] << 24)); };
+
+    uint32_t format = 0, channels = 0, rate = 0, bits = 0;
+    size_t dataOff = 0, dataLen = 0;
+    bool haveFmt = false;
+
+    size_t pos = 12;
+    while (pos + 8 <= d.size()) {
+        size_t sz = rd32(pos + 4);
+        size_t body = pos + 8;
+        if (!memcmp(d.data() + pos, "fmt ", 4) && sz >= 16 && body + 16 <= d.size()) {
+            format   = rd16(body);
+            channels = rd16(body + 2);
+            rate     = rd32(body + 4);
+            bits     = rd16(body + 14);
+            if (format == 0xFFFE && sz >= 26 && body + 26 <= d.size())
+                format = rd16(body + 24);   // WAVE_FORMAT_EXTENSIBLE sub-format
+            haveFmt = true;
+        } else if (!memcmp(d.data() + pos, "data", 4)) {
+            dataOff = body;
+            dataLen = (body + sz > d.size()) ? d.size() - body : sz;
+            break;
+        }
+        pos = body + sz + (sz & 1);
+    }
+    if (!haveFmt || !dataOff || !channels || !rate) return false;
+
+    bool isFloat = (format == 3);
+    if (format != 1 && !isFloat) return false;
+    if (isFloat ? (bits != 32 && bits != 64) : (bits != 8 && bits != 16 && bits != 24 && bits != 32))
+        return false;
+
+    size_t bps = bits / 8;
+    size_t n = dataLen / bps;
+    n -= n % channels;
+    if (!n) return false;
+
+    std::vector<int16_t> pcm(n);
+    const uint8_t* p = d.data() + dataOff;
+    for (size_t i = 0; i < n; i++, p += bps) {
+        int32_t v;
+        if (isFloat) {
+            double f;
+            if (bits == 32) { float x; memcpy(&x, p, 4); f = x; }
+            else            { memcpy(&f, p, 8); }
+            if (f > 1.0) f = 1.0; else if (f < -1.0) f = -1.0;
+            v = (int32_t)(f * 32767.0);
+        } else if (bits == 8)  v = ((int)p[0] - 128) << 8;
+        else if (bits == 16)   v = (int16_t)(p[0] | (p[1] << 8));
+        else if (bits == 24)   v = (int16_t)(p[1] | (p[2] << 8));
+        else                   v = (int16_t)(p[2] | (p[3] << 8));
+        pcm[i] = (int16_t)v;
+    }
+
+    m_sampleRate   = (int)rate;
+    m_channels     = (int)channels;
+    m_totalSamples = n / channels;
+    m_pcm.swap(pcm);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 bool Player::Open(const std::wstring& path, HWND notifyWnd) {
     Close();
     m_notify = notifyWnd;
@@ -93,6 +158,19 @@ bool Player::Open(const std::wstring& path, HWND notifyWnd) {
     std::vector<uint8_t> fileData(fsize);
     fread(fileData.data(), 1, fsize, f);
     fclose(f);
+
+    // WAV (RIFF/WAVE) files are converted to 16-bit PCM directly.
+    if (fileData.size() >= 12 && !memcmp(fileData.data(), "RIFF", 4) &&
+        !memcmp(fileData.data() + 8, "WAVE", 4)) {
+        if (!LoadWav(fileData)) {
+            MessageBoxW(notifyWnd, L"Unsupported or invalid WAV file.", L"Error", MB_OK | MB_ICONERROR);
+            return false;
+        }
+        m_playPos = 0;
+        m_open    = true;
+        m_playing = false;
+        return true;
+    }
 
     // Decode from memory buffer.
     int result = mp3dec_load_buf(&mp3d, fileData.data(), fileData.size(), &info, nullptr, nullptr);

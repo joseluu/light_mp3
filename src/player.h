@@ -48,6 +48,7 @@ private:
     WAVEHDR  m_headers[NUM_BUFS] = {};
     std::vector<int16_t> m_bufData[NUM_BUFS];
 
+    bool LoadWav(const std::vector<uint8_t>& data);
     void FillBuffer(int idx);
     static void CALLBACK WaveOutProc(HWAVEOUT hwo, UINT uMsg,
         DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2);
